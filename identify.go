@@ -7,6 +7,8 @@ import (
 )
 
 func (srv *Server) identify(res http.ResponseWriter, req *http.Request) {
+	res.Header().Add("Content-Type", HTTPContentTypePairingTLV8)
+
 	if srv.IsPaired() {
 		log.Info.Printf("request only valid if unpaired")
 		JsonError(res, JsonStatusInsufficientPrivileges)

@@ -8,6 +8,8 @@ import (
 )
 
 func (srv *Server) getAccessories(res http.ResponseWriter, req *http.Request) {
+	res.Header().Add("Content-Type", HTTPContentTypeHAPJson)
+
 	if !srv.IsAuthorized(req) {
 		log.Info.Printf("request from %s not authorized\n", req.RemoteAddr)
 		JsonError(res, JsonStatusInsufficientPrivileges)

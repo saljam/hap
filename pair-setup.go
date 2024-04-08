@@ -37,6 +37,8 @@ type pairSetupPayload struct {
 }
 
 func (srv *Server) pairSetup(res http.ResponseWriter, req *http.Request) {
+	res.Header().Add("Content-Type", HTTPContentTypePairingTLV8)
+
 	// pairing is only allowed if the accessory is not paired yet
 	if srv.IsPaired() {
 		log.Info.Println("pairing is not allowed")

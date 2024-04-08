@@ -45,6 +45,16 @@ type putCharacteristicData struct {
 	Response *bool `json:"r,omitempty"`
 }
 
+func (srv *Server) characteristics(res http.ResponseWriter, req *http.Request) {
+	res.Header().Add("Content-Type", HTTPContentTypeHAPJson)
+	switch req.Method {
+	case http.MethodGet:
+		srv.getCharacteristics(res, req)
+	case http.MethodPut:
+		srv.putCharacteristics(res, req)
+	}
+}
+
 func (srv *Server) getCharacteristics(res http.ResponseWriter, req *http.Request) {
 	if !srv.IsAuthorized(req) {
 		log.Info.Printf("request from %s not authorized\n", req.RemoteAddr)
@@ -281,6 +291,8 @@ func (srv *Server) findC(aid, iid uint64) *characteristic.C {
 }
 
 func (srv *Server) prepareCharacteristics(res http.ResponseWriter, req *http.Request) {
+	res.Header().Add("Content-Type", HTTPContentTypeHAPJson)
+
 	if !srv.IsAuthorized(req) {
 		log.Info.Printf("request from %s not authorized\n", req.RemoteAddr)
 		JsonError(res, JsonStatusInsufficientPrivileges)

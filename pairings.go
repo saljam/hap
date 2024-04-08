@@ -15,6 +15,8 @@ type pairingPayload struct {
 }
 
 func (srv *Server) pairings(res http.ResponseWriter, req *http.Request) {
+	res.Header().Add("Content-Type", HTTPContentTypePairingTLV8)
+
 	if !srv.IsAuthorized(req) {
 		log.Info.Printf("request from %s not authorized\n", req.RemoteAddr)
 		JsonError(res, JsonStatusInsufficientPrivileges)

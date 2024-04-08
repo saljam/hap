@@ -29,6 +29,8 @@ type pairVerifySession struct {
 }
 
 func (srv *Server) pairVerify(res http.ResponseWriter, req *http.Request) {
+	res.Header().Add("Content-Type", HTTPContentTypePairingTLV8)
+
 	data := pairVerifyPayload{}
 	if err := tlv8.UnmarshalReader(req.Body, &data); err != nil {
 		log.Info.Println("tlv8:", err)

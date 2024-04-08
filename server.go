@@ -3,15 +3,16 @@ package hap
 import (
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/brutella/dnssd"
 	"github.com/brutella/hap/accessory"
 	"github.com/brutella/hap/characteristic"
 	"github.com/brutella/hap/log"
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
 	"github.com/xiam/to"
-	godiacritics "gopkg.in/Regis24GmbH/go-diacritics.v2"
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 
 	"bytes"
 	"context"
@@ -56,7 +57,6 @@ type Server struct {
 	uuid    string // internal identifier (generated and stored on disk)
 
 	port int // listen port (can be different than in Addr)
-	ln   *net.TCPListener
 
 	// for dnssd stuff
 	responder dnssd.Responder
@@ -80,8 +80,7 @@ type ServeMux interface {
 // NewServer returns a new server given a store (to persist data) and accessories.
 // If more than one accessory is added to the server, *a* acts as a bridge.
 func NewServer(store Store, a *accessory.A, as ...*accessory.A) (*Server, error) {
-	r := chi.NewRouter()
-	r.Use(middleware.RequestLogger(&middleware.DefaultLogFormatter{Logger: log.Debug, NoColor: true}))
+	r := http.NewServeMux()
 
 	st := &storer{store}
 	if err := migrate(st); err != nil {
@@ -131,30 +130,22 @@ func NewServer(store Store, a *accessory.A, as ...*accessory.A) (*Server, error)
 	}
 
 	// Group handlers for tlv8 and json encoded content.
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.SetHeader("Content-Type", HTTPContentTypePairingTLV8))
-		r.Post("/pair-setup", s.pairSetup)
-		r.Post("/pair-verify", s.pairVerify)
-		r.Post("/identify", s.identify)
-		r.Post("/pairings", s.pairings)
-	})
-
+	r.HandleFunc("/pair-setup", s.pairSetup)   // POST only
+	r.HandleFunc("/pair-verify", s.pairVerify) // POST only
+	r.HandleFunc("/identify", s.identify)      // POST only
+	r.HandleFunc("/pairings", s.pairings)      // POST only
 	// The json encoded content is encrypted. The encryption keys
 	// are stored in a session. The de-/encryption is done by a Conn.
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.SetHeader("Content-Type", HTTPContentTypeHAPJson))
-		r.Get("/accessories", s.getAccessories)
-		r.Get("/characteristics", s.getCharacteristics)
-		r.Put("/characteristics", s.putCharacteristics)
-		r.Put("/prepare", s.prepareCharacteristics)
-	})
+	r.HandleFunc("/accessories", s.getAccessories)      // GET only
+	r.HandleFunc("/characteristics", s.characteristics) // GET and PUT only
+	r.HandleFunc("/prepare", s.prepareCharacteristics)  // PUT only
 
 	return s, nil
 }
 
 // ServeMux returns the http handler.
-func (s *Server) ServeMux() ServeMux {
-	return s.ss.Handler.(*chi.Mux)
+func (s *Server) ServeMux() *http.ServeMux {
+	return s.ss.Handler.(*http.ServeMux)
 }
 
 // IsAuthorized returns true if the provided
@@ -355,8 +346,6 @@ func (s *Server) prepare() error {
 
 	if len(s.Pin) != 8 {
 		return fmt.Errorf("invald pin length %d", len(s.Pin))
-	} else if _, found := InvalidPins[s.Pin]; found {
-		return fmt.Errorf("insecure pin %s", s.Pin)
 	}
 
 	return nil
@@ -517,21 +506,6 @@ func (s *Server) service() (dnssd.Service, error) {
 	return dnssd.NewService(cfg)
 }
 
-var InvalidPins = map[string]bool{
-	"00000000": true,
-	"11111111": true,
-	"22222222": true,
-	"33333333": true,
-	"44444444": true,
-	"55555555": true,
-	"66666666": true,
-	"77777777": true,
-	"88888888": true,
-	"99999999": true,
-	"12345678": true,
-	"87654321": true,
-}
-
 func (s *Server) fmtPin() string {
 	runes := bytes.Runes([]byte(s.Pin))
 	first := string(runes[:3])
@@ -541,7 +515,10 @@ func (s *Server) fmtPin() string {
 }
 
 func normalize(str string) string {
-	return godiacritics.Normalize(str)
+	str = strings.Replace(str, "ß", "ss", -1)
+	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	result, _, _ := transform.String(t, str)
+	return result
 }
 
 func allZero(s []byte) bool {
